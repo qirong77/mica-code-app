@@ -1,11 +1,14 @@
-import { app, shell, BrowserWindow } from 'electron'
+import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { disposeAllTerminals, registerTerminalIpc } from './terminals'
+import { disposeAllTerminals, registerTerminalIpc, setNotifyServer } from './terminals'
 import { registerWorkspaceIpc } from './workspace'
+import { createNotifyServer } from './notifyServer'
 
 let mainWindow = null
+let notifyServer = null
+let stopNotifyBridge = null
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -16,7 +19,7 @@ function createWindow() {
     show: false,
     autoHideMenuBar: true,
     title: 'Mica Code',
-    backgroundColor: '#0f1115',
+    backgroundColor: '#0e0e0e',
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -37,6 +40,22 @@ function createWindow() {
     }
   })
 
+  mainWindow.on('focus', () => {
+    broadcastWindowState()
+  })
+
+  mainWindow.on('blur', () => {
+    broadcastWindowState()
+  })
+
+  mainWindow.on('show', () => {
+    broadcastWindowState()
+  })
+
+  mainWindow.on('hide', () => {
+    broadcastWindowState()
+  })
+
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
@@ -49,10 +68,41 @@ function createWindow() {
   }
 }
 
-app.whenReady().then(() => {
+function broadcastWindowState() {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  const payload = {
+    focused: mainWindow.isFocused(),
+    visible: mainWindow.isVisible() && !mainWindow.isMinimized()
+  }
+  mainWindow.webContents.send('app:window-state', payload)
+}
+
+function broadcastNotifyChange(payload) {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  mainWindow.webContents.send('notify:changed', payload)
+}
+
+app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.mica.code')
+
+  notifyServer = await createNotifyServer()
+  setNotifyServer(notifyServer)
+  stopNotifyBridge = notifyServer.onChange((payload) => {
+    broadcastNotifyChange(payload)
+  })
+
   registerTerminalIpc()
   registerWorkspaceIpc()
+
+  ipcMain.handle('app:get-window-state', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return { focused: false, visible: false }
+    }
+    return {
+      focused: mainWindow.isFocused(),
+      visible: mainWindow.isVisible() && !mainWindow.isMinimized()
+    }
+  })
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
@@ -65,6 +115,7 @@ app.whenReady().then(() => {
       if (mainWindow.isMinimized()) mainWindow.restore()
       mainWindow.show()
       mainWindow.focus()
+      broadcastWindowState()
       return
     }
 
@@ -76,7 +127,15 @@ app.on('window-all-closed', (event) => {
   event.preventDefault()
 })
 
-app.on('before-quit', () => {
+app.on('before-quit', async () => {
   app.isQuitting = true
   disposeAllTerminals()
+  if (typeof stopNotifyBridge === 'function') {
+    stopNotifyBridge()
+    stopNotifyBridge = null
+  }
+  if (notifyServer) {
+    await notifyServer.close()
+    notifyServer = null
+  }
 })

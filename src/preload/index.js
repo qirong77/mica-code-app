@@ -23,8 +23,29 @@ const workspaceApi = {
   save: (workspace) => ipcRenderer.invoke('workspace:save', workspace)
 }
 
+const notifyApi = {
+  list: () => ipcRenderer.invoke('notify:list'),
+  markRead: (id) => ipcRenderer.invoke('notify:mark-read', { id }),
+  onChanged: (callback) => {
+    const listener = (_event, payload) => callback(payload)
+    ipcRenderer.on('notify:changed', listener)
+    return () => ipcRenderer.removeListener('notify:changed', listener)
+  }
+}
+
+const appApi = {
+  getWindowState: () => ipcRenderer.invoke('app:get-window-state'),
+  onWindowState: (callback) => {
+    const listener = (_event, payload) => callback(payload)
+    ipcRenderer.on('app:window-state', listener)
+    return () => ipcRenderer.removeListener('app:window-state', listener)
+  }
+}
+
 contextBridge.exposeInMainWorld('mica', {
   terminal: terminalApi,
   workspace: workspaceApi,
+  notify: notifyApi,
+  app: appApi,
   platform: process.platform
 })

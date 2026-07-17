@@ -3,6 +3,7 @@ import os from 'os'
 import pty from 'node-pty'
 
 const sessions = new Map()
+let notifyServer = null
 
 function getDefaultShell() {
   if (process.platform === 'win32') {
@@ -25,7 +26,8 @@ function createPty(id, sender, options = {}) {
     env: {
       ...process.env,
       TERM: 'xterm-256color',
-      COLORTERM: 'truecolor'
+      COLORTERM: 'truecolor',
+      ...(notifyServer ? notifyServer.getTerminalEnv(id) : {})
     }
   })
 
@@ -40,12 +42,17 @@ function createPty(id, sender, options = {}) {
 
   term.onExit(({ exitCode, signal }) => {
     sessions.delete(id)
+    notifyServer?.clear(id)
     if (!sender.isDestroyed()) {
       sender.send('terminal:exit', { id, exitCode, signal })
     }
   })
 
   return { id, shell, cwd }
+}
+
+export function setNotifyServer(server) {
+  notifyServer = server
 }
 
 export function registerTerminalIpc() {
@@ -81,6 +88,7 @@ export function registerTerminalIpc() {
       // ignore
     }
     sessions.delete(id)
+    notifyServer?.clear(id)
     return true
   })
 
@@ -92,8 +100,18 @@ export function registerTerminalIpc() {
         // ignore
       }
       sessions.delete(id)
+      notifyServer?.clear(id)
     }
     return true
+  })
+
+  ipcMain.handle('notify:list', () => {
+    return notifyServer ? notifyServer.list() : []
+  })
+
+  ipcMain.handle('notify:mark-read', (_event, { id } = {}) => {
+    if (!id || !notifyServer) return null
+    return notifyServer.markRead(id)
   })
 }
 

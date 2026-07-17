@@ -16,12 +16,12 @@
             <span class="brand-mark">M</span>
             <div>
               <div class="brand-title">Mica Code</div>
-              <div class="brand-subtitle">Terminal Sessions</div>
+              <div class="brand-subtitle">Sessions</div>
             </div>
           </div>
           <div class="sidebar-actions">
-            <button id="btn-new-folder" class="icon-btn" title="新建文件夹">📁</button>
-            <button id="btn-new-terminal" class="icon-btn" title="新建终端">＋</button>
+            <button id="btn-new-folder" class="icon-btn" title="新建文件夹" aria-label="新建文件夹"></button>
+            <button id="btn-new-terminal" class="icon-btn" title="新建终端" aria-label="新建终端"></button>
           </div>
         </div>
         <div id="session-tree" class="session-tree"></div>
@@ -29,9 +29,7 @@
 
       <main class="workspace">
         <section id="terminal-host" class="terminal-host"></section>
-        <div id="empty-state" class="empty-state">
-          选择或新建一个终端会话
-        </div>
+        <div id="empty-state" class="empty-state">选择或新建一个终端会话</div>
       </main>
     </div>
 
