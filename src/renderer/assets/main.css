@@ -60,7 +60,7 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -233,6 +233,9 @@ button {
   background: transparent !important;
   box-shadow: none !important;
   text-shadow: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  vertical-align: top !important;
 }
 
 .jstree-default .jstree-wholerow {
@@ -302,18 +305,28 @@ button {
 
 .jstree-default .jstree-themeicon {
   background-image: none !important;
-  width: 18px !important;
+  width: 18px !important; 
+  height: 32px !important;
+  line-height: 1 !important;
   text-align: center;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0;
+  margin-right: 6px !important;
+  vertical-align: top !important;
 }
-
 .jstree-default .jstree-folder {
+
   color: #8ab4ff;
 }
 
-.jstree-default .jstree-folder::before {
+/* .jstree-default .jstree-folder::before {
   content: '📁';
   font-size: 13px;
-}
+  line-height: 1;
+  display: block;
+} */
 
 .jstree-default .jstree-file {
   color: #9aa8c7;
@@ -322,9 +335,13 @@ button {
 .jstree-default .jstree-file::before {
   content: '⌘';
   font-size: 12px;
+  line-height: 1;
+  display: block;
 }
 
 .jstree-default .jstree-themeicon-custom {
+  /* display: none !important; */
+  /* width: 2px !important; */
   background-size: 16px 16px !important;
 }
 
