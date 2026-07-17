@@ -96,6 +96,13 @@ function broadcastNotifyChange(payload) {
   mainWindow.webContents.send('notify:changed', payload)
 }
 
+function updateBadge() {
+  if (!notifyServer) return
+  const list = notifyServer.list()
+  const count = list.reduce((sum, item) => sum + (item.unread ? 1 : 0), 0)
+  app.setBadgeCount(count)
+}
+
 app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.mica.code')
 
@@ -103,6 +110,7 @@ app.whenReady().then(async () => {
   setNotifyServer(notifyServer)
   stopNotifyBridge = notifyServer.onChange((payload) => {
     broadcastNotifyChange(payload)
+    updateBadge()
   })
 
   registerTerminalIpc()
@@ -152,4 +160,5 @@ app.on('before-quit', async () => {
     await notifyServer.close()
     notifyServer = null
   }
+  app.setBadgeCount(0)
 })

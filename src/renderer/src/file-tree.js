@@ -554,7 +554,7 @@ export class FileTree {
       ? `<input class="ft-rename" data-edit-id="${escapeAttr(node.id)}" value="${escapeAttr(node.text)}" spellcheck="false" />`
       : `<span class="ft-label" title="${escapeAttr(titleText)}">${escapeHtml(node.text)}</span>${
           pathHint
-            ? `<span class="ft-path-hint" title="${escapeAttr(pathHint)}">${escapeHtml(pathHint)}</span>`
+          ?''
             : ''
         }`
 
