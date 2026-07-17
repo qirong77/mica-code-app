@@ -11,12 +11,12 @@
   <body>
     <div id="app" class="app-shell">
       <aside class="sidebar">
-        <div class="sidebar-header">
+        <div class="titlebar-drag drag-region" aria-hidden="true"></div>
+        <div class="sidebar-header no-drag">
           <div class="brand">
             <span class="brand-mark">M</span>
             <div>
               <div class="brand-title">Mica Code</div>
-              <!-- <div class="brand-subtitle">Sessions</div> -->
             </div>
           </div>
           <div class="sidebar-actions">
@@ -24,11 +24,33 @@
             <button id="btn-new-terminal" class="icon-btn" title="新建终端" aria-label="新建终端"></button>
           </div>
         </div>
-        <div id="session-tree" class="session-tree"></div>
+        <div class="sidebar-search no-drag">
+          <div class="search-field">
+            <span class="search-icon" id="search-icon" aria-hidden="true"></span>
+            <input
+              id="session-search"
+              class="search-input"
+              type="search"
+              placeholder="搜索会话"
+              aria-label="搜索会话"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <button
+              type="button"
+              id="session-search-clear"
+              class="search-clear hidden"
+              title="清除"
+              aria-label="清除搜索"
+            ></button>
+          </div>
+        </div>
+        <div id="session-tree" class="session-tree no-drag"></div>
       </aside>
 
       <main class="workspace">
-        <section id="terminal-host" class="terminal-host"></section>
+        <div class="workspace-titlebar drag-region" aria-hidden="true"></div>
+        <section id="terminal-host" class="terminal-host no-drag"></section>
         <div id="empty-state" class="empty-state">选择或新建一个终端会话</div>
       </main>
     </div>

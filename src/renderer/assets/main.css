@@ -76,6 +76,7 @@
     0 1rem 2rem -1.5rem color-mix(in srgb, #000 18%, transparent);
 
   --terminal-bg: #0e0e0e;
+  --titlebar-height: 34px;
   --unread: #e75e78;
 
   font-family:
@@ -132,12 +133,17 @@ input:focus {
   background: var(--ui-bg-sidebar);
 }
 
+.titlebar-drag {
+  height: var(--titlebar-height);
+  flex-shrink: 0;
+}
+
 .sidebar-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 12px 10px 10px;
+  padding: 4px 10px 10px;
 }
 
 .brand {
@@ -181,6 +187,8 @@ input:focus {
 }
 
 .icon-btn {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
   display: grid;
   place-items: center;
   width: 28px;
@@ -204,6 +212,89 @@ input:focus {
 
 .icon-btn:active {
   background: var(--ui-control-active-background);
+}
+
+/* ── Search ─────────────────────────────────────────── */
+
+.sidebar-search {
+  flex-shrink: 0;
+  padding: 2px 14px 8px;
+}
+
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.12s ease-out;
+}
+
+.search-field:focus-within {
+  border-bottom-color: var(--ui-stroke-secondary);
+}
+
+.search-icon {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: color-mix(in srgb, var(--ui-text-tertiary) 70%, transparent);
+  pointer-events: none;
+}
+
+.search-input {
+  min-width: 0;
+  flex: 1;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ui-text-primary);
+  font: inherit;
+  font-size: 0.8125rem;
+}
+
+.search-input::placeholder {
+  color: var(--ui-text-tertiary);
+}
+
+.search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+
+.search-clear {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: color-mix(in srgb, var(--ui-text-tertiary) 85%, transparent);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.1s ease-out, color 0.1s ease-out;
+}
+
+.search-clear:hover {
+  background: var(--ui-control-hover-background);
+  color: var(--ui-text-primary);
+  transition: none;
+}
+
+.search-clear.hidden {
+  display: none;
+}
+
+.ft-empty {
+  padding: 10px 10px 6px;
+  font-size: 0.75rem;
+  color: var(--ui-text-quaternary);
 }
 
 .session-tree {
@@ -234,6 +325,13 @@ input:focus {
   flex-direction: column;
   min-width: 0;
   background: var(--terminal-bg);
+}
+
+.workspace-titlebar {
+  height: var(--titlebar-height);
+  flex-shrink: 0;
+  background: var(--ui-bg-sidebar);
+  border-bottom: 1px solid color-mix(in srgb, var(--ui-base) 12%, transparent);
 }
 
 .terminal-host {
@@ -476,4 +574,123 @@ input:focus {
 
 .ft-menu-item.is-danger:hover {
   background: color-mix(in srgb, var(--ui-red) 12%, transparent);
+}
+
+
+/* ── Path hint on folders ────────────────────────────── */
+
+.ft-path-hint {
+  min-width: 0;
+  max-width: 42%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.72rem;
+  line-height: 1;
+  color: var(--ui-text-quaternary);
+  flex-shrink: 2;
+}
+
+.ft-row.is-selected .ft-path-hint,
+.ft-row:hover .ft-path-hint {
+  color: var(--ui-text-tertiary);
+}
+
+/* ── Modal prompt ────────────────────────────────────── */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 11000;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, #000 46%, transparent);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.modal-dialog {
+  width: min(420px, calc(100vw - 32px));
+  padding: 14px;
+  border: 1px solid var(--ui-stroke-secondary);
+  border-radius: calc(var(--radius-scalar) * 1.2rem);
+  background: color-mix(in srgb, var(--ui-bg-elevated) 96%, transparent);
+  box-shadow: var(--shadow-md);
+}
+
+.modal-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ui-text-primary);
+  margin-bottom: 6px;
+}
+
+.modal-hint {
+  font-size: 0.75rem;
+  color: var(--ui-text-tertiary);
+  line-height: 1.4;
+  margin-bottom: 12px;
+}
+
+.modal-input {
+  width: 100%;
+  height: 32px;
+  margin: 0 0 12px;
+  padding: 0 10px;
+  border: 1px solid var(--ui-stroke-tertiary);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--ui-base) 4%, transparent);
+  color: var(--ui-text-primary);
+  font: inherit;
+  font-size: 0.8125rem;
+}
+
+.modal-input:focus {
+  border-color: var(--ui-stroke-primary);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.modal-btn {
+  min-width: 64px;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ui-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.modal-btn:hover {
+  background: var(--ui-control-hover-background);
+  color: var(--ui-text-primary);
+}
+
+.modal-btn.is-primary {
+  background: var(--ui-control-active-background);
+  border-color: var(--ui-stroke-tertiary);
+  color: var(--ui-text-primary);
+}
+
+.modal-btn.is-primary:hover {
+  background: color-mix(in srgb, var(--ui-base) 12%, transparent);
+}
+
+
+/* Title-bar drag regions for the frameless / hidden-titlebar window. */
+.drag-region {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }

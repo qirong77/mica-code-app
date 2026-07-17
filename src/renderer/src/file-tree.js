@@ -11,6 +11,7 @@ import { iconHtml } from './icons.js'
  *   parent: string,
  *   text: string,
  *   type: 'folder' | 'terminal',
+ *   cwd?: string | null,
  *   state?: { opened?: boolean, selected?: boolean }
  * }} TreeNode
  */
@@ -39,6 +40,12 @@ export class FileTree {
     this.dropPosition = null
     this.menuEl = null
     this.menuNodeId = null
+    /** @type {string} */
+    this.query = ''
+    /** @type {Set<string> | null} */
+    this.visibleIds = null
+    /** @type {Set<string>} */
+    this.forceOpenIds = new Set()
 
     this.rootEl.classList.add('file-tree')
     this.rootEl.addEventListener('click', (e) => this.#onClick(e))
@@ -72,6 +79,7 @@ export class FileTree {
         parent: raw.parent || '#',
         text: raw.text || '',
         type: raw.type === 'folder' ? 'folder' : 'terminal',
+        cwd: raw.type === 'folder' && typeof raw.cwd === 'string' && raw.cwd.trim() ? raw.cwd.trim() : null,
         state: {
           opened: false,
           selected: !!raw.state?.selected
@@ -95,6 +103,7 @@ export class FileTree {
       this.selectedId = null
     }
 
+    this.#recomputeFilter()
     this.render()
   }
 
@@ -108,7 +117,8 @@ export class FileTree {
       for (const id of this.children.get(parentId) || []) {
         const n = this.nodes.get(id)
         if (!n) continue
-        out.push({
+        /** @type {TreeNode} */
+        const item = {
           id: n.id,
           parent: n.parent,
           text: n.text,
@@ -117,7 +127,9 @@ export class FileTree {
             opened: n.type === 'folder' ? !!n.state?.opened : false,
             selected: n.id === this.selectedId
           }
-        })
+        }
+        if (n.type === 'folder' && n.cwd) item.cwd = n.cwd
+        out.push(item)
         walk(id)
       }
     }
@@ -132,6 +144,111 @@ export class FileTree {
   getSelected() {
     return this.selectedId ? this.nodes.get(this.selectedId) || null : null
   }
+
+  /**
+   * Set default cwd for a folder. Empty/null clears it.
+   * @param {string} id
+   * @param {string | null | undefined} cwd
+   */
+  setFolderCwd(id, cwd) {
+    const node = this.nodes.get(id)
+    if (!node || node.type !== 'folder') return false
+    const next = typeof cwd === 'string' ? cwd.trim() : ''
+    node.cwd = next || null
+    this.#recomputeFilter()
+    this.render()
+    this.handlers.onChange?.()
+    return true
+  }
+
+  /**
+   * Resolve cwd for a new terminal under folderId by walking ancestors.
+   * Nearest non-empty folder.cwd wins.
+   * @param {string} folderId
+   * @returns {string | null}
+   */
+  resolveDefaultCwd(folderId) {
+    let cur = folderId
+    while (cur && cur !== '#') {
+      const node = this.nodes.get(cur)
+      if (!node) break
+      if (node.type === 'folder' && node.cwd) return node.cwd
+      cur = node.parent
+    }
+    return null
+  }
+
+  /**
+   * Case-insensitive filter by node text / folder cwd. Empty clears filter.
+   * @param {string} query
+   */
+  setQuery(query) {
+    this.query = (query || '').trim()
+    this.#recomputeFilter()
+    this.render()
+  }
+
+  getQuery() {
+    return this.query
+  }
+
+  #recomputeFilter() {
+    const q = this.query.toLowerCase()
+    if (!q) {
+      this.visibleIds = null
+      this.forceOpenIds = new Set()
+      return
+    }
+
+    /** @type {Set<string>} */
+    const matched = new Set()
+    for (const node of this.nodes.values()) {
+      const hay = `${node.text} ${node.cwd || ''}`.toLowerCase()
+      if (hay.includes(q)) matched.add(node.id)
+    }
+
+    /** @type {Set<string>} */
+    const visible = new Set()
+    /** @type {Set<string>} */
+    const forceOpen = new Set()
+
+    const markAncestors = (id) => {
+      let cur = this.nodes.get(id)
+      while (cur) {
+        visible.add(cur.id)
+        if (cur.parent && cur.parent !== '#') {
+          forceOpen.add(cur.parent)
+          cur = this.nodes.get(cur.parent)
+        } else {
+          break
+        }
+      }
+    }
+
+    const markDescendants = (id) => {
+      visible.add(id)
+      for (const cid of this.children.get(id) || []) {
+        markDescendants(cid)
+        const child = this.nodes.get(cid)
+        if (child?.type === 'folder') forceOpen.add(cid)
+      }
+    }
+
+    for (const id of matched) {
+      markAncestors(id)
+      const node = this.nodes.get(id)
+      if (node?.type === 'folder') {
+        forceOpen.add(id)
+        markDescendants(id)
+      } else {
+        visible.add(id)
+      }
+    }
+
+    this.visibleIds = visible
+    this.forceOpenIds = forceOpen
+  }
+
 
   /**
    * @param {string} id
@@ -168,6 +285,7 @@ export class FileTree {
       parent,
       text: data.text,
       type: data.type,
+      cwd: data.type === 'folder' && typeof data.cwd === 'string' && data.cwd.trim() ? data.cwd.trim() : null,
       state: {
         opened: data.type === 'folder' ? data.state?.opened !== false : false,
         selected: false
@@ -186,6 +304,7 @@ export class FileTree {
       p = pn?.parent
     }
 
+    this.#recomputeFilter()
     this.render()
     this.handlers.onChange?.()
     return node.id
@@ -212,6 +331,7 @@ export class FileTree {
       if (idx >= 0) siblings.splice(idx, 1)
     }
     removeRecursive(id)
+    this.#recomputeFilter()
     this.render()
     this.handlers.onChange?.()
   }
@@ -231,6 +351,7 @@ export class FileTree {
     }
     node.text = next
     this.editingId = null
+    this.#recomputeFilter()
     this.render()
     this.handlers.onChange?.()
   }
@@ -348,7 +469,12 @@ export class FileTree {
 
   render() {
     const openEditId = this.editingId
-    const html = `<ul class="ft-root" role="tree">${this.#renderChildren('#', 0)}</ul>`
+    const body = this.#renderChildren('#', 0)
+    const empty =
+      this.query && !body
+        ? `<div class="ft-empty">没有匹配的会话</div>`
+        : ''
+    const html = `${empty}<ul class="ft-root" role="tree">${body}</ul>`
     this.rootEl.innerHTML = html
 
     if (openEditId) {
@@ -385,6 +511,7 @@ export class FileTree {
     for (const id of ids) {
       const node = this.nodes.get(id)
       if (!node) continue
+      if (this.visibleIds && !this.visibleIds.has(id)) continue
       html += this.#renderNode(node, depth)
     }
     return html
@@ -396,10 +523,10 @@ export class FileTree {
    */
   #renderNode(node, depth) {
     const isFolder = node.type === 'folder'
-    const opened = isFolder && !!node.state?.opened
+    const opened =
+      isFolder && (!!node.state?.opened || (this.query ? this.forceOpenIds.has(node.id) : false))
     const selected = node.id === this.selectedId
     const editing = node.id === this.editingId
-    const kids = this.children.get(node.id) || []
     const pad = 8 + depth * 14
 
     let iconName = 'terminal'
@@ -421,9 +548,15 @@ export class FileTree {
       ? `<span class="ft-chevron${opened ? ' is-open' : ''}" data-action="toggle" data-node-id="${escapeAttr(node.id)}">${iconHtml('chevron-right', { size: 13 })}</span>`
       : `<span class="ft-chevron ft-chevron-spacer"></span>`
 
+    const pathHint = isFolder && node.cwd ? node.cwd : ''
+    const titleText = pathHint ? `${node.text} — ${pathHint}` : node.text
     const label = editing
       ? `<input class="ft-rename" data-edit-id="${escapeAttr(node.id)}" value="${escapeAttr(node.text)}" spellcheck="false" />`
-      : `<span class="ft-label" title="${escapeAttr(node.text)}">${escapeHtml(node.text)}</span>`
+      : `<span class="ft-label" title="${escapeAttr(titleText)}">${escapeHtml(node.text)}</span>${
+          pathHint
+            ? `<span class="ft-path-hint" title="${escapeAttr(pathHint)}">${escapeHtml(pathHint)}</span>`
+            : ''
+        }`
 
     let childrenHtml = ''
     if (isFolder && opened) {
@@ -534,7 +667,11 @@ export class FileTree {
     if (node.type === 'folder') {
       items.push(
         { id: 'createFolder', label: '新建子文件夹' },
-        { id: 'createTerminal', label: '新建终端' }
+        { id: 'createTerminal', label: '新建终端' },
+        {
+          id: 'setDefaultPath',
+          label: node.cwd ? `默认路径: ${node.cwd}` : '添加默认路径'
+        }
       )
     }
     items.push({ id: 'remove', label: '删除', danger: true })

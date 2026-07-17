@@ -2,8 +2,8 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import '../assets/main.css'
-import { FileTree } from './file-tree.js'
 import { iconHtml } from './icons.js'
+import { FileTree } from './file-tree.js'
 
 const treeHost = document.getElementById('session-tree')
 const hostEl = document.getElementById('terminal-host')
@@ -24,6 +24,14 @@ let tree = null
 
 function uid(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
 }
 
 function scheduleSave() {
@@ -203,7 +211,8 @@ async function activateTerminal(id) {
   }
 
   if (!entry.ready) {
-    await window.mica.terminal.create({ id })
+    const cwd = resolveTerminalCwd(id)
+    await window.mica.terminal.create({ id, ...(cwd ? { cwd } : {}) })
     entry.ready = true
     requestAnimationFrame(() => {
       try {
@@ -253,6 +262,78 @@ async function disposeTerminal(id) {
     }
   }
   scheduleSave()
+}
+
+function resolveTerminalCwd(terminalId) {
+  if (!tree) return null
+  const node = tree.getNode(terminalId)
+  if (!node) return null
+  // Prefer parent folder chain
+  return tree.resolveDefaultCwd(node.parent || '#')
+}
+
+/**
+ * @param {string} title
+ * @param {string} [initial]
+ * @param {string} [hint]
+ * @returns {Promise<string | null>} null = cancelled
+ */
+function promptText(title, initial = '', hint = '') {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div')
+    overlay.className = 'modal-overlay'
+    overlay.innerHTML = `
+      <div class="modal-dialog" role="dialog" aria-modal="true">
+        <div class="modal-title">${escapeHtml(title)}</div>
+        ${hint ? `<div class="modal-hint">${escapeHtml(hint)}</div>` : ''}
+        <input class="modal-input" type="text" spellcheck="false" value="" />
+        <div class="modal-actions">
+          <button type="button" class="modal-btn" data-act="cancel">取消</button>
+          <button type="button" class="modal-btn is-primary" data-act="ok">确定</button>
+        </div>
+      </div>
+    `
+    document.body.appendChild(overlay)
+    const input = overlay.querySelector('.modal-input')
+    const dialog = overlay.querySelector('.modal-dialog')
+    if (input instanceof HTMLInputElement) {
+      input.value = initial
+      requestAnimationFrame(() => {
+        input.focus()
+        input.select()
+      })
+    }
+
+    const close = (value) => {
+      overlay.remove()
+      resolve(value)
+    }
+
+    const submit = () => {
+      const value = input instanceof HTMLInputElement ? input.value.trim() : ''
+      close(value)
+    }
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) close(null)
+    })
+    dialog?.addEventListener('click', (e) => {
+      const btn = e.target instanceof Element ? e.target.closest('[data-act]') : null
+      if (!btn) return
+      const act = btn.getAttribute('data-act')
+      if (act === 'cancel') close(null)
+      if (act === 'ok') submit()
+    })
+    input?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        submit()
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        close(null)
+      }
+    })
+  })
 }
 
 function createFolder(parent = '#') {
@@ -310,6 +391,18 @@ async function handleContextAction(action, node) {
     createTerminal(node.id)
     return
   }
+  if (action === 'setDefaultPath') {
+    if (node.type !== 'folder') return
+    const value = await promptText(
+      '设置默认路径',
+      node.cwd || '',
+      '该文件夹下新建的终端将使用此路径作为工作目录。留空可清除。'
+    )
+    if (value === null) return
+    tree.setFolderCwd(node.id, value)
+    scheduleSave()
+    return
+  }
   if (action === 'remove') {
     if (node.type === 'folder') {
       const children = tree.getTerminalIdsUnder(node.id)
@@ -323,6 +416,42 @@ async function handleContextAction(action, node) {
     tree.deleteNode(node.id)
     await disposeTerminal(node.id)
   }
+}
+
+
+function bindSearch() {
+  const input = document.getElementById('session-search')
+  const clearBtn = document.getElementById('session-search-clear')
+  const icon = document.getElementById('search-icon')
+  if (icon) icon.textContent = '⌕'
+  if (clearBtn) clearBtn.textContent = '×' 
+
+  const syncClear = () => {
+    if (!clearBtn || !input) return
+    clearBtn.classList.toggle('hidden', !input.value)
+  }
+
+  input?.addEventListener('input', () => {
+    tree?.setQuery(input.value)
+    syncClear()
+  })
+  input?.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (!input.value) return
+      e.preventDefault()
+      input.value = ''
+      tree?.setQuery('')
+      syncClear()
+    }
+  })
+  clearBtn?.addEventListener('click', () => {
+    if (!input) return
+    input.value = ''
+    tree?.setQuery('')
+    syncClear()
+    input.focus()
+  })
+  syncClear()
 }
 
 function bindToolbar() {
@@ -418,6 +547,7 @@ async function bootstrap() {
     parent: node.parent,
     text: node.text,
     type: node.type || (node.parent === '#' ? 'folder' : 'terminal'),
+    cwd: node.cwd || null,
     state: node.state || {}
   }))
 

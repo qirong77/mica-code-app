@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import os from 'os'
+import { existsSync, statSync } from 'fs'
 import pty from 'node-pty'
 
 const sessions = new Map()
@@ -12,9 +13,20 @@ function getDefaultShell() {
   return process.env.SHELL || '/bin/zsh'
 }
 
+function resolveCwd(cwd) {
+  const home = os.homedir()
+  if (!cwd || typeof cwd !== 'string') return home
+  try {
+    if (existsSync(cwd) && statSync(cwd).isDirectory()) return cwd
+  } catch {
+    // ignore
+  }
+  return home
+}
+
 function createPty(id, sender, options = {}) {
   const shell = options.shell || getDefaultShell()
-  const cwd = options.cwd || os.homedir()
+  const cwd = resolveCwd(options.cwd)
   const cols = options.cols || 80
   const rows = options.rows || 24
 

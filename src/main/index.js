@@ -10,7 +10,11 @@ let mainWindow = null
 let notifyServer = null
 let stopNotifyBridge = null
 
+const HEADER_HEIGHT_PX = 34
+const MAC_TRAFFIC_LIGHT_POSITION = { x: 12, y: 12 }
+
 function createWindow() {
+  const isMac = process.platform === 'darwin'
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -20,6 +24,12 @@ function createWindow() {
     autoHideMenuBar: true,
     title: 'Mica Code',
     backgroundColor: '#0e0e0e',
+    ...(isMac
+      ? {
+          titleBarStyle: 'hidden',
+          trafficLightPosition: MAC_TRAFFIC_LIGHT_POSITION
+        }
+      : {}),
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -28,6 +38,10 @@ function createWindow() {
       nodeIntegration: false
     }
   })
+
+  if (isMac) {
+    mainWindow.setSheetOffset(HEADER_HEIGHT_PX)
+  }
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
