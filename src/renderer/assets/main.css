@@ -151,14 +151,13 @@ input:focus {
 .brand-mark {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--ui-base) 10%, transparent);
-  color: var(--ui-text-primary);
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 0.02em;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  background: #1677ff;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
   flex-shrink: 0;
 }
 
