@@ -11,7 +11,6 @@ window.$ = window.jQuery = $
 const treeEl = $('#session-tree')
 const hostEl = document.getElementById('terminal-host')
 const emptyStateEl = document.getElementById('empty-state')
-const activeTitleEl = document.getElementById('active-title')
 
 /** @type {Map<string, { term: Terminal, fit: FitAddon, el: HTMLElement, ready: boolean }>} */
 const terminals = new Map()
@@ -54,10 +53,6 @@ function setEmptyState(visible) {
   emptyStateEl.classList.toggle('hidden', !visible)
 }
 
-function setActiveTitle(text) {
-  activeTitleEl.textContent = text || '未选择终端'
-}
-
 function ensureTerminalView(id) {
   let entry = terminals.get(id)
   if (entry) return entry
@@ -91,10 +86,23 @@ function ensureTerminalView(id) {
   })
 
   term.attachCustomKeyEventHandler((event) => {
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'l' && event.type === 'keydown') {
+    if (event.type !== 'keydown') return true
+
+    const key = event.key.toLowerCase()
+    const mod = event.metaKey || event.ctrlKey
+
+    // Cmd/Ctrl+K or Cmd/Ctrl+L: clear screen
+    if (mod && !event.altKey && !event.shiftKey && (key === 'k' || key === 'l')) {
       term.clear()
       return false
     }
+
+    // Cmd/Ctrl+Delete/Backspace: delete current line (Ctrl+A, Ctrl+K)
+    if (mod && !event.altKey && !event.shiftKey && (key === 'backspace' || key === 'delete')) {
+      window.mica.terminal.write(id, '\x01\x0b')
+      return false
+    }
+
     return true
   })
 
@@ -104,7 +112,6 @@ function ensureTerminalView(id) {
 async function activateTerminal(id, title) {
   if (!id) {
     activeId = null
-    setActiveTitle('未选择终端')
     setEmptyState(true)
     for (const entry of terminals.values()) {
       entry.el.classList.remove('active')
@@ -115,7 +122,6 @@ async function activateTerminal(id, title) {
 
   const entry = ensureTerminalView(id)
   activeId = id
-  setActiveTitle(title || id)
   setEmptyState(false)
 
   for (const [key, item] of terminals) {
@@ -236,10 +242,6 @@ function bindToolbar() {
     createTerminal(selected?.id || 'folder-default')
   })
 
-  document.getElementById('btn-clear').addEventListener('click', () => {
-    if (!activeId) return
-    terminals.get(activeId)?.term.clear()
-  })
 }
 
 function initTree(nodes) {
@@ -339,12 +341,6 @@ function initTree(nodes) {
     scheduleSave()
   })
 
-  treeEl.on('rename_node.jstree', (_e, data) => {
-    if (data.node.type === 'terminal' && data.node.id === activeId) {
-      setActiveTitle(data.text)
-    }
-  })
-
   treeEl.on('dblclick.jstree', '.jstree-anchor', function () {
     const tree = treeEl.jstree(true)
     const node = tree.get_node(this)
@@ -414,7 +410,6 @@ async function bootstrap() {
 
 bootstrap().catch((error) => {
   console.error(error)
-  setActiveTitle('启动失败')
   emptyStateEl.textContent = String(error)
   setEmptyState(true)
 })
