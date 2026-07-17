@@ -1,22 +1,30 @@
-import { contextBridge } from 'electron'
-import { electronAPI } from '@electron-toolkit/preload'
+import { contextBridge, ipcRenderer } from 'electron'
 
-// Custom APIs for renderer
-const api = {}
-
-// Use `contextBridge` APIs to expose Electron APIs to
-// renderer only if context isolation is enabled, otherwise
-// just add to the DOM global.
-if (process.contextIsolated) {
-  try {
-    contextBridge.exposeInMainWorld('electron', electronAPI)
-    contextBridge.exposeInMainWorld('api', api)
-  } catch (error) {
-    console.error(error)
+const terminalApi = {
+  create: (payload) => ipcRenderer.invoke('terminal:create', payload),
+  write: (id, data) => ipcRenderer.invoke('terminal:write', { id, data }),
+  resize: (id, cols, rows) => ipcRenderer.invoke('terminal:resize', { id, cols, rows }),
+  dispose: (id) => ipcRenderer.invoke('terminal:dispose', { id }),
+  disposeAll: () => ipcRenderer.invoke('terminal:dispose-all'),
+  onData: (callback) => {
+    const listener = (_event, payload) => callback(payload)
+    ipcRenderer.on('terminal:data', listener)
+    return () => ipcRenderer.removeListener('terminal:data', listener)
+  },
+  onExit: (callback) => {
+    const listener = (_event, payload) => callback(payload)
+    ipcRenderer.on('terminal:exit', listener)
+    return () => ipcRenderer.removeListener('terminal:exit', listener)
   }
-} else {
-  // @ts-ignore (define in dts)
-  window.electron = electronAPI
-  // @ts-ignore (define in dts)
-  window.api = api
 }
+
+const workspaceApi = {
+  get: () => ipcRenderer.invoke('workspace:get'),
+  save: (workspace) => ipcRenderer.invoke('workspace:save', workspace)
+}
+
+contextBridge.exposeInMainWorld('mica', {
+  terminal: terminalApi,
+  workspace: workspaceApi,
+  platform: process.platform
+})

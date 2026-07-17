@@ -1,163 +1,459 @@
-@import './base.css';
-
-body {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  background-image: url('./wavy-lines.svg');
-  background-size: cover;
-  user-select: none;
-}
-
-code {
-  font-weight: 600;
-  padding: 3px 5px;
-  border-radius: 2px;
-  background-color: var(--color-background-mute);
+:root {
+  color-scheme: dark;
+  --bg: #0f1115;
+  --bg-elevated: #151922;
+  --bg-soft: #1b2130;
+  --border: #2a3142;
+  --text: #e8ecf5;
+  --muted: #93a0b8;
+  --accent: #1677ff;
+  --accent-soft: rgba(22, 119, 255, 0.16);
+  --danger: #ff6b6b;
+  --sidebar-width: 280px;
+  --radius: 12px;
   font-family:
-    ui-monospace,
-    SFMono-Regular,
-    SF Mono,
-    Menlo,
-    Consolas,
-    Liberation Mono,
-    monospace;
-  font-size: 85%;
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
 }
 
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
 #app {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  margin-bottom: 80px;
-}
-
-.logo {
-  margin-bottom: 20px;
-  -webkit-user-drag: none;
-  height: 128px;
-  width: 128px;
-  will-change: filter;
-  transition: filter 300ms;
-}
-
-.logo:hover {
-  filter: drop-shadow(0 0 1.2em #6988e6aa);
-}
-
-.creator {
-  font-size: 14px;
-  line-height: 16px;
-  color: var(--ev-c-text-2);
-  font-weight: 600;
-  margin-bottom: 10px;
-}
-
-.text {
-  font-size: 28px;
-  color: var(--ev-c-text-1);
-  font-weight: 700;
-  line-height: 32px;
-  text-align: center;
-  margin: 0 10px;
-  padding: 16px 0;
-}
-
-.tip {
-  font-size: 16px;
-  line-height: 24px;
-  color: var(--ev-c-text-2);
-  font-weight: 600;
-}
-
-.js {
-  background: -webkit-linear-gradient(315deg, #f0dc4e 40%, #f1f1f3);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  font-weight: 700;
-}
-
-.actions {
-  display: flex;
-  padding-top: 32px;
-  margin: -6px;
-  flex-wrap: wrap;
-  justify-content: flex-start;
-}
-
-.action {
-  flex-shrink: 0;
-  padding: 6px;
-}
-
-.action a {
-  cursor: pointer;
-  text-decoration: none;
-  display: inline-block;
-  border: 1px solid transparent;
-  text-align: center;
-  font-weight: 600;
-  white-space: nowrap;
-  border-radius: 20px;
-  padding: 0 20px;
-  line-height: 38px;
-  font-size: 14px;
-  border-color: var(--ev-button-alt-border);
-  color: var(--ev-button-alt-text);
-  background-color: var(--ev-button-alt-bg);
-}
-
-.action a:hover {
-  border-color: var(--ev-button-alt-hover-border);
-  color: var(--ev-button-alt-hover-text);
-  background-color: var(--ev-button-alt-hover-bg);
-}
-
-.versions {
-  position: absolute;
-  bottom: 30px;
-  margin: 0 auto;
-  padding: 15px 0;
-  font-family: 'Menlo', 'Lucida Console', monospace;
-  display: inline-flex;
+  width: 100%;
+  height: 100%;
+  margin: 0;
   overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+}
+
+button {
+  font: inherit;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) 1fr;
+  height: 100%;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  background:
+    linear-gradient(180deg, rgba(22, 119, 255, 0.08), transparent 180px),
+    var(--bg-elevated);
+}
+
+.sidebar-header {
+  display: flex;
   align-items: center;
-  border-radius: 22px;
-  background-color: #202127;
-  backdrop-filter: blur(24px);
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
 }
 
-.versions li {
-  display: block;
-  float: left;
-  border-right: 1px solid var(--ev-c-gray-1);
-  padding: 0 20px;
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: white;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.brand-title {
   font-size: 14px;
-  line-height: 14px;
-  opacity: 0.8;
-  &:last-child {
-    border: none;
-  }
+  font-weight: 650;
 }
 
-@media (max-width: 720px) {
-  .text {
-    font-size: 20px;
-  }
+.brand-subtitle {
+  font-size: 12px;
+  color: var(--muted);
 }
 
-@media (max-width: 620px) {
-  .versions {
-    display: none;
-  }
+.sidebar-actions {
+  display: flex;
+  gap: 6px;
 }
 
-@media (max-width: 350px) {
-  .tip,
-  .actions {
-    display: none;
-  }
+.icon-btn,
+.text-btn {
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
+  color: var(--text);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+
+.icon-btn {
+  width: 34px;
+  height: 34px;
+}
+
+.text-btn {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.icon-btn:hover,
+.text-btn:hover {
+  border-color: rgba(22, 119, 255, 0.5);
+  background: var(--accent-soft);
+}
+
+.session-tree {
+  flex: 1;
+  overflow: auto;
+  padding: 10px 8px 16px;
+}
+
+.sidebar-footer {
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.workspace {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: #0b0d11;
+}
+
+.workspace-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(15, 17, 21, 0.92);
+  backdrop-filter: blur(10px);
+}
+
+.active-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.terminal-host {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  padding: 8px;
+}
+
+.terminal-view {
+  position: absolute;
+  inset: 8px;
+  display: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #0b0d11;
+}
+
+.terminal-view.active {
+  display: block;
+}
+
+.terminal-view .xterm {
+  height: 100%;
+  padding: 8px;
+}
+
+.terminal-view .xterm-viewport {
+  overflow-y: auto !important;
+}
+
+.empty-state {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.empty-state.hidden {
+  display: none;
+}
+
+/* jsTree theme overrides */
+.jstree-default {
+  background: transparent;
+}
+
+.jstree-default .jstree-container-ul {
+  margin: 0;
+  padding: 0;
+}
+
+.jstree-default .jstree-node {
+  margin-left: 12px;
+  min-height: 32px;
+  line-height: 32px;
+}
+
+.jstree-default .jstree-anchor {
+  color: var(--text) !important;
+  border-radius: 8px;
+  height: 32px !important;
+  line-height: 32px !important;
+  padding-right: 10px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+.jstree-default .jstree-wholerow {
+  height: 32px;
+  border-radius: 8px;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.jstree-default .jstree-wholerow-hovered {
+  background: rgba(255, 255, 255, 0.05) !important;
+  box-shadow: none !important;
+}
+
+.jstree-default .jstree-hovered {
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--text) !important;
+}
+
+.jstree-default .jstree-wholerow-clicked {
+  background: rgba(22, 119, 255, 0.22) !important;
+  box-shadow: none !important;
+}
+
+.jstree-default .jstree-clicked {
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #fff !important;
+}
+
+.jstree-default .jstree-wholerow-clicked + .jstree-ocl + .jstree-anchor,
+.jstree-default .jstree-clicked {
+  color: #fff !important;
+}
+
+.jstree-default .jstree-icon {
+  color: var(--muted);
+  background-image: none !important;
+}
+
+.jstree-default .jstree-ocl {
+  background-image: none !important;
+  position: relative;
+}
+
+.jstree-default .jstree-closed > .jstree-ocl::before,
+.jstree-default .jstree-open > .jstree-ocl::before {
+  content: '';
+  position: absolute;
+  top: 12px;
+  left: 10px;
+  width: 0;
+  height: 0;
+  border-style: solid;
+}
+
+.jstree-default .jstree-closed > .jstree-ocl::before {
+  border-width: 5px 0 5px 6px;
+  border-color: transparent transparent transparent var(--muted);
+}
+
+.jstree-default .jstree-open > .jstree-ocl::before {
+  border-width: 6px 5px 0 5px;
+  border-color: var(--muted) transparent transparent transparent;
+}
+
+.jstree-default .jstree-themeicon {
+  background-image: none !important;
+  width: 18px !important;
+  text-align: center;
+}
+
+.jstree-default .jstree-folder {
+  color: #8ab4ff;
+}
+
+.jstree-default .jstree-folder::before {
+  content: '📁';
+  font-size: 13px;
+}
+
+.jstree-default .jstree-file {
+  color: #9aa8c7;
+}
+
+.jstree-default .jstree-file::before {
+  content: '⌘';
+  font-size: 12px;
+}
+
+.jstree-default .jstree-themeicon-custom {
+  background-size: 16px 16px !important;
+}
+
+.jstree-rename-input {
+  background: #121722 !important;
+  color: var(--text) !important;
+  border: 1px solid var(--accent) !important;
+  border-radius: 8px !important;
+  outline: none !important;
+  box-shadow: none !important;
+  padding: 2px 8px !important;
+  height: 28px !important;
+  line-height: 28px !important;
+  margin-top: 2px !important;
+}
+
+/* Context menu - override jstree/vakata defaults */
+.vakata-context {
+  z-index: 10000 !important;
+}
+
+.vakata-context,
+.vakata-context ul {
+  min-width: 148px !important;
+  margin: 0 !important;
+  padding: 4px !important;
+  background: #171b24 !important;
+  border: 1px solid #2a3142 !important;
+  border-radius: 10px !important;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.42) !important;
+  color: #e8ecf5 !important;
+  font-size: 12px !important;
+  font-family: inherit !important;
+  line-height: 1.2 !important;
+}
+
+.vakata-context li {
+  margin: 0 !important;
+  padding: 0 !important;
+  list-style: none !important;
+  background: transparent !important;
+}
+
+.vakata-context li > a {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0 !important;
+  margin: 1px 0 !important;
+  padding: 6px 10px !important;
+  border: 0 !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #e8ecf5 !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  line-height: 1.25 !important;
+  text-shadow: none !important;
+  white-space: nowrap !important;
+}
+
+.vakata-context li > a:hover,
+.vakata-context .vakata-context-hover > a,
+.vakata-context li > a:focus {
+  background: rgba(22, 119, 255, 0.2) !important;
+  box-shadow: none !important;
+  color: #ffffff !important;
+  border: 0 !important;
+}
+
+.vakata-context .vakata-context-separator {
+  margin: 4px 6px !important;
+  border-top: 1px solid #2a3142 !important;
+  background: transparent !important;
+  height: 0 !important;
+}
+
+.vakata-context .vakata-context-separator > a {
+  display: none !important;
+  height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+}
+
+.vakata-context li > a > i,
+.vakata-context li > a > i:empty,
+.vakata-context .vakata-contextmenu-sep {
+  display: none !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.vakata-context .vakata-context-disabled > a,
+.vakata-context .vakata-context-disabled > a:hover {
+  color: #6f7b93 !important;
+  background: transparent !important;
+  opacity: 0.7 !important;
+}
+
+.vakata-context .right-arrow,
+.vakata-context .left-arrow {
+  display: none !important;
+}
+
+
+/* Final overrides against jstree default theme sprites */
+.jstree-default .jstree-wholerow-ul .jstree-wholerow-clicked,
+.jstree-default .jstree-wholerow-clicked,
+.jstree-default-small .jstree-wholerow-clicked,
+.jstree-default-large .jstree-wholerow-clicked {
+  background: rgba(22, 119, 255, 0.22) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.jstree-default .jstree-clicked,
+.jstree-default .jstree-clicked.jstree-hovered,
+.jstree-default .jstree-wholerow-ul .jstree-clicked {
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: #ffffff !important;
+}
+
+.jstree-default .jstree-anchor > .jstree-themeicon {
+  background-image: none !important;
 }

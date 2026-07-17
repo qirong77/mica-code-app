@@ -1,40 +1,48 @@
 <!doctype html>
-<html>
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <title>Electron</title>
-    <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
+    <title>Mica Code</title>
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; worker-src 'self' blob:"
     />
-
-    <link href="./assets/main.css" type="text/css" rel="stylesheet" />
   </head>
-
   <body>
-    <div id="app">
-      <img alt="logo" class="logo" src="./assets/electron.svg" />
-      <div class="creator">Powered by electron-vite</div>
-      <div class="text">
-        Build an Electron app with
-        <span class="js">JavaScript</span>
-      </div>
-      <p class="tip">Please try pressing <code>F12</code> to open the devTool</p>
-      <div class="actions">
-        <div class="action">
-          <a href="https://electron-vite.org/" target="_blank" rel="noreferrer">Documentation</a>
+    <div id="app" class="app-shell">
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <div class="brand">
+            <span class="brand-mark">M</span>
+            <div>
+              <div class="brand-title">Mica Code</div>
+              <div class="brand-subtitle">Terminal Sessions</div>
+            </div>
+          </div>
+          <div class="sidebar-actions">
+            <button id="btn-new-folder" class="icon-btn" title="新建文件夹">📁</button>
+            <button id="btn-new-terminal" class="icon-btn" title="新建终端">＋</button>
+          </div>
         </div>
-        <div class="action">
-          <a id="ipcHandler" target="_blank" rel="noreferrer">Send IPC</a>
+        <div id="session-tree" class="session-tree"></div>
+        <div class="sidebar-footer">
+          <div class="hint">双击重命名 · 拖拽排序</div>
+          <div class="hint">右键更多操作</div>
         </div>
-      </div>
+      </aside>
 
-      <ul class="versions">
-        <li class="electron-version"></li>
-        <li class="chrome-version"></li>
-        <li class="node-version"></li>
-      </ul>
+      <main class="workspace">
+        <header class="workspace-header">
+          <div id="active-title" class="active-title">未选择终端</div>
+          <div class="workspace-actions">
+            <button id="btn-clear" class="text-btn" title="清屏">清屏</button>
+          </div>
+        </header>
+        <section id="terminal-host" class="terminal-host"></section>
+        <div id="empty-state" class="empty-state">
+          选择或新建一个终端会话
+        </div>
+      </main>
     </div>
 
     <script type="module" src="./src/renderer.js"></script>
