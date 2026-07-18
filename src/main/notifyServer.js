@@ -105,9 +105,11 @@ async function handleRequest(req, res, ctx) {
       return
     }
 
+    const isRunningEvent = type === 'turn.started'
     const state = {
       terminalId,
-      unread: true,
+      unread: !isRunningEvent,
+      running: isRunningEvent,
       lastType: type,
       lastEventAt: Number(body?.ts) > 0 ? Number(body.ts) : Date.now(),
       summary: typeof body?.summary === 'string' ? body.summary.slice(0, 200) : undefined
@@ -137,7 +139,7 @@ async function handleRequest(req, res, ctx) {
 function markRead(states, bus, terminalId) {
   const current = states.get(terminalId)
   if (!current) {
-    return { terminalId, unread: false, lastType: null, lastEventAt: null }
+    return { terminalId, unread: false, running: false, lastType: null, lastEventAt: null }
   }
   if (!current.unread) return current
 
@@ -166,7 +168,9 @@ function authorize(req, token) {
 function normalizeEventType(value) {
   if (typeof value !== 'string') return null
   const type = value.trim()
+  if (type === 'turn.started') return type
   if (type === 'turn.completed' || type === 'turn.error' || type === 'turn.aborted') return type
+  if (type === 'started') return 'turn.started'
   if (type === 'completed' || type === 'error' || type === 'aborted') return `turn.${type}`
   return null
 }
@@ -175,6 +179,7 @@ function serializeStates(states) {
   return [...states.values()].map((item) => ({
     terminalId: item.terminalId,
     unread: !!item.unread,
+    running: !!item.running,
     lastType: item.lastType ?? null,
     lastEventAt: item.lastEventAt ?? null,
     summary: item.summary,

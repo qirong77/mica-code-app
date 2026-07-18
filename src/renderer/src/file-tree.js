@@ -23,7 +23,7 @@ export class FileTree {
    *   onSelect?: (node: TreeNode) => void,
    *   onChange?: () => void,
    *   onContextAction?: (action: string, node: TreeNode) => void,
-   *   getUnread?: (id: string) => { unread: boolean, lastType?: string | null } | null
+   *   getUnread?: (id: string) => { unread: boolean, running?: boolean, lastType?: string | null } | null
    * }} handlers
    */
   constructor(rootEl, handlers = {}) {
@@ -200,205 +200,197 @@ export class FileTree {
       return
     }
 
-    /** @type {Set<string>} */
+    // Collect all ids that match directly or are ancestors of a match
     const matched = new Set()
-    for (const node of this.nodes.values()) {
-      const hay = `${node.text} ${node.cwd || ''}`.toLowerCase()
-      if (hay.includes(q)) matched.add(node.id)
-    }
+    const ancestors = new Set()
 
-    /** @type {Set<string>} */
-    const visible = new Set()
-    /** @type {Set<string>} */
-    const forceOpen = new Set()
+    const walk = (parentId, ancestorPath) => {
+      let hasMatchInSubtree = false
+      for (const id of this.children.get(parentId) || []) {
+        const node = this.nodes.get(id)
+        if (!node) continue
 
-    const markAncestors = (id) => {
-      let cur = this.nodes.get(id)
-      while (cur) {
-        visible.add(cur.id)
-        if (cur.parent && cur.parent !== '#') {
-          forceOpen.add(cur.parent)
-          cur = this.nodes.get(cur.parent)
-        } else {
-          break
+        const textMatch =
+          node.text.toLowerCase().includes(q) ||
+          (node.type === 'folder' && node.cwd && node.cwd.toLowerCase().includes(q))
+
+        const childMatch = node.type === 'folder' ? walk(id, [...ancestorPath, id]) : false
+        const anyMatch = textMatch || childMatch
+        if (anyMatch) {
+          matched.add(id)
+          if (textMatch) {
+            for (const aid of ancestorPath) {
+              ancestors.add(aid)
+              const an = this.nodes.get(aid)
+              if (an && an.type === 'folder') this.forceOpenIds.add(aid)
+            }
+          }
+          hasMatchInSubtree = true
         }
       }
+      return hasMatchInSubtree
     }
 
-    const markDescendants = (id) => {
-      visible.add(id)
-      for (const cid of this.children.get(id) || []) {
-        markDescendants(cid)
-        const child = this.nodes.get(cid)
-        if (child?.type === 'folder') forceOpen.add(cid)
-      }
-    }
-
-    for (const id of matched) {
-      markAncestors(id)
-      const node = this.nodes.get(id)
-      if (node?.type === 'folder') {
-        forceOpen.add(id)
-        markDescendants(id)
-      } else {
-        visible.add(id)
-      }
-    }
-
-    this.visibleIds = visible
-    this.forceOpenIds = forceOpen
-  }
-
-
-  /**
-   * @param {string} id
-   * @param {boolean} [silent]
-   */
-  select(id, silent = false) {
-    if (id && !this.nodes.has(id)) return
-    this.selectedId = id || null
-    this.render()
-    if (!silent && id) {
-      const node = this.nodes.get(id)
-      if (node) this.handlers.onSelect?.(node)
-    }
-  }
-
-  deselectAll() {
-    this.selectedId = null
-    this.render()
+    walk('#', [])
+    this.visibleIds = new Set([...matched, ...ancestors])
   }
 
   /**
-   * @param {string} parent
-   * @param {Partial<TreeNode> & { id: string, text: string, type: 'folder'|'terminal' }} data
-   * @returns {string|null}
+   * @param {string} parentId
+   * @param {TreeNode} raw
+   * @returns {string | null} created node id
    */
-  createNode(parent, data) {
-    if (parent !== '#' && this.nodes.get(parent)?.type !== 'folder') {
-      parent = this.nodes.get(parent)?.parent || '#'
-    }
-    if (this.nodes.has(data.id)) return null
-
+  createNode(parentId, raw) {
+    if (!this.children.has(parentId)) this.children.set(parentId, [])
     const node = {
-      id: data.id,
-      parent,
-      text: data.text,
-      type: data.type,
-      cwd: data.type === 'folder' && typeof data.cwd === 'string' && data.cwd.trim() ? data.cwd.trim() : null,
+      id: raw.id,
+      parent: parentId,
+      text: raw.text || '',
+      type: raw.type === 'folder' ? 'folder' : 'terminal',
+      cwd: raw.type === 'folder' && typeof raw.cwd === 'string' && raw.cwd.trim() ? raw.cwd.trim() : null,
       state: {
-        opened: data.type === 'folder' ? data.state?.opened !== false : false,
-        selected: false
+        opened: raw.type === 'folder' ? (raw.state?.opened === undefined ? true : !!raw.state.opened) : false,
+        selected: !!raw.state?.selected
       }
     }
     this.nodes.set(node.id, node)
-    if (!this.children.has(parent)) this.children.set(parent, [])
-    this.children.get(parent).push(node.id)
+    this.children.get(parentId).push(node.id)
     if (!this.children.has(node.id)) this.children.set(node.id, [])
-
-    // Ensure ancestors open
-    let p = parent
-    while (p && p !== '#') {
-      const pn = this.nodes.get(p)
-      if (pn?.type === 'folder') pn.state.opened = true
-      p = pn?.parent
-    }
-
     this.#recomputeFilter()
     this.render()
     this.handlers.onChange?.()
     return node.id
   }
 
-  /**
-   * @param {string} id
-   */
   deleteNode(id) {
     const node = this.nodes.get(id)
-    if (!node) return
+    if (!node) return false
 
-    const removeRecursive = (nid) => {
-      const kids = [...(this.children.get(nid) || [])]
-      for (const kid of kids) removeRecursive(kid)
-      this.children.delete(nid)
-      this.nodes.delete(nid)
-      if (this.selectedId === nid) this.selectedId = null
+    // Recursively remove children
+    const stack = [id]
+    while (stack.length) {
+      const cur = stack.pop()
+      for (const cid of this.children.get(cur) || []) {
+        stack.push(cid)
+      }
+      this.nodes.delete(cur)
+      this.children.delete(cur)
     }
 
+    // Remove from parent's children list
     const siblings = this.children.get(node.parent)
     if (siblings) {
       const idx = siblings.indexOf(id)
-      if (idx >= 0) siblings.splice(idx, 1)
+      if (idx !== -1) siblings.splice(idx, 1)
     }
-    removeRecursive(id)
+
+    if (this.selectedId === id) this.selectedId = null
+    if (this.editingId === id) this.editingId = null
+
     this.#recomputeFilter()
+    this.render()
+    this.handlers.onChange?.()
+    return true
+  }
+
+  select(id, scrollIntoView = false) {
+    if (!this.nodes.has(id)) return false
+    if (this.selectedId === id) return true
+    this.selectedId = id
+    this.render()
+    if (scrollIntoView) {
+      requestAnimationFrame(() => {
+        const row = this.rootEl.querySelector(`[data-node-id="${CSS.escape(id)}"]`)
+        row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+      })
+    }
+    this.handlers.onChange?.()
+    return true
+  }
+
+  deselectAll() {
+    if (this.selectedId === null) return
+    this.selectedId = null
     this.render()
     this.handlers.onChange?.()
   }
 
-  /**
-   * @param {string} id
-   * @param {string} text
-   */
-  rename(id, text) {
-    const node = this.nodes.get(id)
-    if (!node) return
-    const next = text.trim()
-    if (!next || next === node.text) {
-      this.editingId = null
-      this.render()
-      return
-    }
-    node.text = next
-    this.editingId = null
-    this.#recomputeFilter()
-    this.render()
-    this.handlers.onChange?.()
-  }
-
-  /**
-   * @param {string} id
-   */
   startEdit(id) {
     if (!this.nodes.has(id)) return
     this.editingId = id
     this.render()
-    const input = this.rootEl.querySelector(`input[data-edit-id="${CSS.escape(id)}"]`)
-    if (input instanceof HTMLInputElement) {
-      input.focus()
-      input.select()
+  }
+
+  rename(id, value) {
+    const node = this.nodes.get(id)
+    if (!node) return false
+    const text = (value || '').trim()
+    if (!text) return false
+    if (node.text === text) {
+      this.editingId = null
+      this.render()
+      return true
     }
+    node.text = text
+    this.editingId = null
+    this.#recomputeFilter()
+    this.render()
+    this.handlers.onChange?.()
+    return true
   }
 
   /**
+   * Toggle folder open/close.
    * @param {string} id
-   * @param {string} parent
+   */
+  toggle(id) {
+    const node = this.nodes.get(id)
+    if (!node || node.type !== 'folder') return
+    node.state.opened = !node.state.opened
+    if (this.query && node.state.opened) {
+      this.forceOpenIds.add(id)
+    } else if (this.query && !node.state.opened) {
+      this.forceOpenIds.delete(id)
+    }
+    this.render()
+    this.handlers.onChange?.()
+  }
+
+  /**
+   * Move node (and subtree) under newParent at given index.
+   * @param {string} id
+   * @param {string} newParent
    * @param {number} [index]
    */
-  moveNode(id, parent, index) {
+  move(id, newParent, index) {
     const node = this.nodes.get(id)
     if (!node) return false
-    if (parent !== '#' && this.nodes.get(parent)?.type !== 'folder') return false
-    // Cannot move into self or descendant
-    if (parent === id || this.#isDescendant(parent, id)) return false
+    const targetParent = this.nodes.get(newParent)
+    if (newParent !== '#' && (!targetParent || targetParent.type !== 'folder')) return false
+    if (newParent === id) return false
+    if (this.#isDescendant(newParent, id)) return false
 
-    const from = this.children.get(node.parent)
-    if (from) {
-      const i = from.indexOf(id)
-      if (i >= 0) from.splice(i, 1)
+    const oldSiblings = this.children.get(node.parent)
+    if (oldSiblings) {
+      const oldIdx = oldSiblings.indexOf(id)
+      if (oldIdx !== -1) oldSiblings.splice(oldIdx, 1)
     }
 
-    node.parent = parent
-    if (!this.children.has(parent)) this.children.set(parent, [])
-    const to = this.children.get(parent)
-    const at = typeof index === 'number' && index >= 0 && index <= to.length ? index : to.length
-    to.splice(at, 0, id)
+    node.parent = newParent
+    if (!this.children.has(newParent)) this.children.set(newParent, [])
+    const newSiblings = this.children.get(newParent)
+    const insertAt = typeof index === 'number' && index >= 0 && index <= newSiblings.length
+      ? index
+      : newSiblings.length
+    newSiblings.splice(insertAt, 0, id)
 
-    if (parent !== '#') {
-      const p = this.nodes.get(parent)
-      if (p) p.state.opened = true
+    // Ensure auto-open when dragging into a closed folder
+    if (targetParent?.type === 'folder' && !targetParent.state?.opened) {
+      targetParent.state.opened = true
+      if (this.query) this.forceOpenIds.add(newParent)
     }
 
+    this.#recomputeFilter()
     this.render()
     this.handlers.onChange?.()
     return true
@@ -533,7 +525,9 @@ export class FileTree {
     if (isFolder) iconName = opened ? 'folder-open' : 'folder'
 
     const unreadState = !isFolder ? this.handlers.getUnread?.(node.id) : null
-    const unreadClass = unreadState?.unread
+    const running = !!unreadState?.running
+    const unread = !running && !!unreadState?.unread
+    const unreadClass = unread
       ? [
           'has-unread',
           unreadState.lastType === 'turn.error' ? 'has-unread-error' : '',
@@ -543,6 +537,7 @@ export class FileTree {
           .filter(Boolean)
           .join(' ')
       : ''
+    const runningClass = running ? 'has-running' : ''
 
     const chevron = isFolder
       ? `<span class="ft-chevron${opened ? ' is-open' : ''}" data-action="toggle" data-node-id="${escapeAttr(node.id)}">${iconHtml('chevron-right', { size: 13 })}</span>`
@@ -563,12 +558,19 @@ export class FileTree {
       childrenHtml = `<ul class="ft-children" role="group">${this.#renderChildren(node.id, depth + 1)}</ul>`
     }
 
+    let dotHtml = ''
+    if (running) {
+      dotHtml = '<span class="ft-running-dot" aria-hidden="true"></span>'
+    } else if (unread) {
+      dotHtml = '<span class="ft-unread-dot" aria-hidden="true"></span>'
+    }
+
     return `<li class="ft-node" role="treeitem" aria-expanded="${isFolder ? opened : undefined}" data-id="${escapeAttr(node.id)}">
-      <div class="ft-row ${selected ? 'is-selected' : ''} ${unreadClass}" data-node-id="${escapeAttr(node.id)}" data-type="${node.type}" draggable="${editing ? 'false' : 'true'}" style="padding-left:${pad}px">
+      <div class="ft-row ${selected ? 'is-selected' : ''} ${unreadClass} ${runningClass}" data-node-id="${escapeAttr(node.id)}" data-type="${node.type}" draggable="${editing ? 'false' : 'true'}" style="padding-left:${pad}px">
         ${chevron}
         <span class="ft-icon ft-icon-${node.type}">${iconHtml(iconName, { size: 14 })}</span>
         ${label}
-        ${unreadState?.unread ? '<span class="ft-unread-dot" aria-hidden="true"></span>' : ''}
+        ${dotHtml}
       </div>
       ${childrenHtml}
     </li>`
@@ -576,20 +578,29 @@ export class FileTree {
 
   #applyUnread(rowEl, id) {
     const state = this.handlers.getUnread?.(id)
-    rowEl.classList.toggle('has-unread', !!state?.unread)
-    rowEl.classList.toggle('has-unread-error', !!state?.unread && state?.lastType === 'turn.error')
-    rowEl.classList.toggle('has-unread-completed', !!state?.unread && state?.lastType === 'turn.completed')
-    rowEl.classList.toggle('has-unread-aborted', !!state?.unread && state?.lastType === 'turn.aborted')
-    let dot = rowEl.querySelector('.ft-unread-dot')
-    if (state?.unread) {
-      if (!dot) {
-        dot = document.createElement('span')
-        dot.className = 'ft-unread-dot'
-        dot.setAttribute('aria-hidden', 'true')
-        rowEl.appendChild(dot)
-      }
-    } else if (dot) {
-      dot.remove()
+    const running = !!state?.running
+    const unread = !running && !!state?.unread
+
+    rowEl.classList.toggle('has-running', running)
+    rowEl.classList.toggle('has-unread', unread)
+    rowEl.classList.toggle('has-unread-error', unread && state?.lastType === 'turn.error')
+    rowEl.classList.toggle('has-unread-completed', unread && state?.lastType === 'turn.completed')
+    rowEl.classList.toggle('has-unread-aborted', unread && state?.lastType === 'turn.aborted')
+
+    // Remove existing dots
+    const existingDot = rowEl.querySelector('.ft-unread-dot, .ft-running-dot')
+    if (existingDot) existingDot.remove()
+
+    if (running) {
+      const dot = document.createElement('span')
+      dot.className = 'ft-running-dot'
+      dot.setAttribute('aria-hidden', 'true')
+      rowEl.appendChild(dot)
+    } else if (unread) {
+      const dot = document.createElement('span')
+      dot.className = 'ft-unread-dot'
+      dot.setAttribute('aria-hidden', 'true')
+      rowEl.appendChild(dot)
     }
   }
 
@@ -603,227 +614,194 @@ export class FileTree {
     return false
   }
 
-  #rowFromEvent(e) {
-    const el = e.target instanceof Element ? e.target.closest('[data-node-id]') : null
-    if (!el || !this.rootEl.contains(el)) return null
-    return el
-  }
+  // ── Event handlers ────────────────────────────────────
 
   #onClick(e) {
-    const target = e.target instanceof Element ? e.target : null
-    if (!target) return
-    if (target.closest('input.ft-rename')) return
+    const row = e.target.closest('[data-node-id]')
+    if (!row) return
 
-    const toggle = target.closest('[data-action="toggle"]')
-    if (toggle) {
-      e.stopPropagation()
-      const id = toggle.getAttribute('data-node-id')
-      const node = id ? this.nodes.get(id) : null
-      if (node?.type === 'folder') {
-        node.state.opened = !node.state.opened
-        this.render()
-        this.handlers.onChange?.()
+    const action = e.target.closest('[data-action]')
+    if (action) {
+      const actionType = action.getAttribute('data-action')
+      const nodeId = action.getAttribute('data-node-id')
+      if (actionType === 'toggle' && nodeId) {
+        this.toggle(nodeId)
       }
       return
     }
 
-    const row = this.#rowFromEvent(e)
-    if (!row) return
     const id = row.getAttribute('data-node-id')
     if (!id) return
-    this.select(id)
+
+    this.select(id, false)
+    const node = this.nodes.get(id)
+    if (node) this.handlers.onSelect?.(node)
   }
 
   #onDblClick(e) {
-    const row = this.#rowFromEvent(e)
+    const row = e.target.closest('[data-node-id]')
     if (!row) return
-    if (e.target instanceof Element && e.target.closest('input.ft-rename')) return
     const id = row.getAttribute('data-node-id')
-    if (id) this.startEdit(id)
+    if (!id) return
+    const node = this.nodes.get(id)
+    if (!node) return
+    if (node.type === 'folder') {
+      this.toggle(id)
+    } else {
+      this.startEdit(id)
+    }
   }
 
   #onContextMenu(e) {
     e.preventDefault()
-    const row = this.#rowFromEvent(e)
-    if (!row) {
-      this.closeMenu()
-      return
-    }
+    const row = e.target.closest('[data-node-id]')
+    if (!row) return
     const id = row.getAttribute('data-node-id')
-    const node = id ? this.nodes.get(id) : null
+    if (!id) return
+    const node = this.nodes.get(id)
     if (!node) return
-    this.select(id, true)
-    this.#openMenu(node, e.clientX, e.clientY)
-  }
 
-  #openMenu(node, x, y) {
     this.closeMenu()
+
+    this.menuNodeId = id
     const menu = document.createElement('div')
     menu.className = 'ft-menu'
-    menu.setAttribute('role', 'menu')
 
-    /** @type {{ id: string, label: string, danger?: boolean }[]} */
-    const items = [{ id: 'rename', label: '重命名' }]
+    const items = []
+    items.push({ label: '重命名', action: 'rename' })
     if (node.type === 'folder') {
-      items.push(
-        { id: 'createFolder', label: '新建子文件夹' },
-        { id: 'createTerminal', label: '新建终端' },
-        {
-          id: 'setDefaultPath',
-          label: node.cwd ? `默认路径: ${node.cwd}` : '添加默认路径'
-        }
-      )
+      items.push({ label: '新建文件夹', action: 'createFolder' })
+      items.push({ label: '新建终端', action: 'createTerminal' })
+      items.push({ label: '设置默认路径…', action: 'setDefaultPath' })
     }
-    items.push({ id: 'remove', label: '删除', danger: true })
+    items.push({ label: '删除', action: 'remove', danger: true })
 
     menu.innerHTML = items
       .map(
         (item) =>
-          `<button type="button" class="ft-menu-item${item.danger ? ' is-danger' : ''}" data-action="${item.id}" role="menuitem">${escapeHtml(item.label)}</button>`
+          `<button class="ft-menu-item${item.danger ? ' is-danger' : ''}" data-action="${item.action}">${escapeHtml(item.label)}</button>`
       )
       .join('')
 
-    document.body.appendChild(menu)
-    this.menuEl = menu
-    this.menuNodeId = node.id
-
-    const rect = menu.getBoundingClientRect()
-    let left = x
-    let top = y
-    if (left + rect.width > window.innerWidth - 8) left = window.innerWidth - rect.width - 8
-    if (top + rect.height > window.innerHeight - 8) top = window.innerHeight - rect.height - 8
-    menu.style.left = `${Math.max(8, left)}px`
-    menu.style.top = `${Math.max(8, top)}px`
-
     menu.addEventListener('click', (ev) => {
-      const btn = ev.target instanceof Element ? ev.target.closest('[data-action]') : null
+      const btn = ev.target.closest('[data-action]')
       if (!btn) return
       const action = btn.getAttribute('data-action')
-      const current = this.nodes.get(this.menuNodeId || '')
       this.closeMenu()
-      if (action && current) this.handlers.onContextAction?.(action, current)
+      if (action) this.handlers.onContextAction?.(action, node)
     })
+
+    document.body.appendChild(menu)
+
+    // Position
+    const rect = row.getBoundingClientRect()
+    const menuH = menu.offsetHeight || 200
+    const menuW = menu.offsetWidth || 148
+    let top = rect.bottom + 4
+    let left = rect.left
+    if (top + menuH > window.innerHeight) top = rect.top - menuH - 4
+    if (left + menuW > window.innerWidth) left = window.innerWidth - menuW - 8
+    if (left < 4) left = 4
+    menu.style.top = `${top}px`
+    menu.style.left = `${left}px`
+
+    this.menuEl = menu
   }
 
   #onDragStart(e) {
-    const row = this.#rowFromEvent(e)
-    if (!row || !(e instanceof DragEvent)) return
-    if (row.querySelector('input.ft-rename')) {
-      e.preventDefault()
-      return
-    }
+    const row = e.target.closest('[data-node-id]')
+    if (!row) return
     const id = row.getAttribute('data-node-id')
-    if (!id) return
+    if (!id || id === this.editingId) return
     this.dragId = id
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', id)
     row.classList.add('is-dragging')
-    e.dataTransfer?.setData('text/plain', id)
-    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
   }
 
   #onDragOver(e) {
-    if (!this.dragId || !(e instanceof DragEvent)) return
+    if (!this.dragId) return
     e.preventDefault()
-    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+    e.dataTransfer.dropEffect = 'move'
 
-    const row = this.#rowFromEvent(e)
-    this.#clearDropMarkers()
-    if (!row) {
-      this.dropTargetId = '#'
-      this.dropPosition = 'inside'
-      return
-    }
-
+    const row = e.target.closest('[data-node-id]')
+    if (!row) return
     const targetId = row.getAttribute('data-node-id')
-    const target = targetId ? this.nodes.get(targetId) : null
-    if (!target || targetId === this.dragId || this.#isDescendant(targetId, this.dragId)) {
-      this.dropTargetId = null
-      return
+    if (!targetId || targetId === this.dragId) return
+
+    // Clear previous drop classes
+    if (this.dropTargetId) {
+      const prev = this.rootEl.querySelector(`[data-node-id="${CSS.escape(this.dropTargetId)}"]`)
+      if (prev) {
+        prev.classList.remove('drop-before', 'drop-after', 'drop-inside')
+      }
     }
 
+    this.dropTargetId = targetId
     const rect = row.getBoundingClientRect()
-    const y = e.clientY - rect.top
-    const ratio = y / rect.height
+    const y = e.clientY
+    const h = rect.height
+    const pct = (y - rect.top) / h
 
-    if (target.type === 'folder') {
-      if (ratio < 0.25) {
-        this.dropTargetId = targetId
-        this.dropPosition = 'before'
-        row.classList.add('drop-before')
-      } else if (ratio > 0.75) {
-        this.dropTargetId = targetId
-        this.dropPosition = 'after'
-        row.classList.add('drop-after')
-      } else {
-        this.dropTargetId = targetId
-        this.dropPosition = 'inside'
-        row.classList.add('drop-inside')
-      }
+    const targetNode = this.nodes.get(targetId)
+    if (targetNode?.type === 'folder' && pct > 0.25 && pct < 0.75) {
+      this.dropPosition = 'inside'
+      row.classList.add('drop-inside')
+    } else if (pct < 0.5) {
+      this.dropPosition = 'before'
+      row.classList.add('drop-before')
     } else {
-      this.dropTargetId = targetId
-      this.dropPosition = ratio < 0.5 ? 'before' : 'after'
-      row.classList.add(ratio < 0.5 ? 'drop-before' : 'drop-after')
+      this.dropPosition = 'after'
+      row.classList.add('drop-after')
     }
   }
 
   #onDragLeave(e) {
-    const row = this.#rowFromEvent(e)
-    if (row) {
-      row.classList.remove('drop-before', 'drop-after', 'drop-inside')
-    }
+    const row = e.target.closest('[data-node-id]')
+    if (!row) return
+    if (row.getAttribute('data-node-id') !== this.dropTargetId) return
+    row.classList.remove('drop-before', 'drop-after', 'drop-inside')
   }
 
   #onDrop(e) {
-    if (!this.dragId || !(e instanceof DragEvent)) return
     e.preventDefault()
-    const dragId = this.dragId
-    const targetId = this.dropTargetId
-    const position = this.dropPosition
-    this.#onDragEnd()
-    if (!targetId || !position) return
-
-    if (targetId === '#') {
-      this.moveNode(dragId, '#')
-      return
+    if (!this.dragId || !this.dropTargetId) return
+    const row = this.rootEl.querySelector(`[data-node-id="${CSS.escape(this.dropTargetId)}"]`)
+    if (row) {
+      row.classList.remove('drop-before', 'drop-after', 'drop-inside')
     }
 
-    const target = this.nodes.get(targetId)
-    if (!target) return
+    const targetNode = this.nodes.get(this.dropTargetId)
+    if (!targetNode) return
 
-    if (position === 'inside') {
-      this.moveNode(dragId, targetId)
-      return
+    let newParent = targetNode.parent
+    let index = undefined
+
+    if (this.dropPosition === 'inside') {
+      newParent = this.dropTargetId
+    } else {
+      const siblings = this.children.get(targetNode.parent) || []
+      const idx = siblings.indexOf(this.dropTargetId)
+      if (idx !== -1) {
+        index = this.dropPosition === 'after' ? idx + 1 : idx
+      }
     }
 
-    const parent = target.parent
-    const siblings = this.children.get(parent) || []
-    let index = siblings.indexOf(targetId)
-    if (index < 0) return
-    if (position === 'after') index += 1
+    this.move(this.dragId, newParent, index)
 
-    // Adjust if moving within same parent and from before index
-    const fromParent = this.nodes.get(dragId)?.parent
-    if (fromParent === parent) {
-      const fromIndex = siblings.indexOf(dragId)
-      if (fromIndex >= 0 && fromIndex < index) index -= 1
-    }
-
-    this.moveNode(dragId, parent, index)
-  }
-
-  #onDragEnd() {
     this.dragId = null
     this.dropTargetId = null
     this.dropPosition = null
-    this.#clearDropMarkers()
-    for (const el of this.rootEl.querySelectorAll('.is-dragging')) {
-      el.classList.remove('is-dragging')
-    }
   }
 
-  #clearDropMarkers() {
-    for (const el of this.rootEl.querySelectorAll('.drop-before, .drop-after, .drop-inside')) {
-      el.classList.remove('drop-before', 'drop-after', 'drop-inside')
+  #onDragEnd() {
+    if (this.dragId) {
+      const row = this.rootEl.querySelector(`[data-node-id="${CSS.escape(this.dragId)}"]`)
+      if (row) row.classList.remove('is-dragging')
     }
+    this.dragId = null
+    this.dropTargetId = null
+    this.dropPosition = null
   }
 }
 
@@ -836,5 +814,9 @@ function escapeHtml(value) {
 }
 
 function escapeAttr(value) {
-  return escapeHtml(value).replaceAll("'", '&#39;')
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
 }

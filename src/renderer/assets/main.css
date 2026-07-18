@@ -78,6 +78,7 @@
   --terminal-bg: #0e0e0e;
   --titlebar-height: 34px;
   --unread: #e75e78;
+  --running: #46c57a;
 
   font-family:
     'Segoe WPC',
@@ -528,6 +529,16 @@ input:focus {
   flex-shrink: 0;
   background: var(--unread);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--unread) 18%, transparent);
+}
+
+.ft-running-dot {
+  width: 7px;
+  height: 7px;
+  margin-left: 4px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--running);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--running) 18%, transparent);
 }
 
 /* ── Context menu ────────────────────────────────────── */

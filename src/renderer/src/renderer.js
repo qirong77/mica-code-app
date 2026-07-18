@@ -11,7 +11,7 @@ const emptyStateEl = document.getElementById('empty-state')
 
 /** @type {Map<string, { term: Terminal, fit: FitAddon, el: HTMLElement, ready: boolean }>} */
 const terminals = new Map()
-/** @type {Map<string, { unread: boolean, lastType?: string | null, lastEventAt?: number | null }>} */
+/** @type {Map<string, { unread: boolean, running?: boolean, lastType?: string | null, lastEventAt?: number | null }>} */
 const unreadStates = new Map()
 
 let workspace = null
@@ -61,11 +61,12 @@ function isWindowReadable() {
 
 function setUnreadState(id, state) {
   if (!id) return
-  if (!state || !state.unread) {
+  if (!state || (!state.unread && !state.running)) {
     unreadStates.delete(id)
   } else {
     unreadStates.set(id, {
-      unread: true,
+      unread: !!state.unread,
+      running: !!state.running,
       lastType: state.lastType ?? null,
       lastEventAt: state.lastEventAt ?? Date.now()
     })
@@ -77,9 +78,10 @@ function syncUnreadFromList(list) {
   const next = new Map()
   for (const item of list || []) {
     if (!item?.terminalId) continue
-    if (!item.unread) continue
+    if (!item.unread && !item.running) continue
     next.set(item.terminalId, {
-      unread: true,
+      unread: !!item.unread,
+      running: !!item.running,
       lastType: item.lastType ?? null,
       lastEventAt: item.lastEventAt ?? null
     })
@@ -541,14 +543,14 @@ function fitActiveTerminal() {
 function bindNotifyAndWindowState() {
   window.mica.notify.onChanged((payload) => {
     if (payload?.type === 'cleared' && payload.terminalId) {
-      setUnreadState(payload.terminalId, { unread: false })
+      setUnreadState(payload.terminalId, { unread: false, running: false })
       return
     }
 
     if (payload?.state?.terminalId) {
       const id = payload.state.terminalId
       if (payload.state.unread && id === activeId && isWindowReadable()) {
-        setUnreadState(id, { unread: false })
+        setUnreadState(id, { unread: false, running: false })
         window.mica.notify.markRead(id).catch((error) => {
           console.error('mark read failed', 'notify-while-active', error)
         })
