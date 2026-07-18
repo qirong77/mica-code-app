@@ -169,6 +169,63 @@ function ensureTerminalView(id) {
     if (id === activeId) maybeMarkActiveRead('pointer')
   })
 
+  const interceptKey = (event) => {
+    const key = event.key.toLowerCase()
+    const mod = event.metaKey || event.ctrlKey
+
+    if (!mod && !event.altKey && event.shiftKey && key === 'enter') {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      window.mica.terminal.write(id, '\x1b[13;2u')
+      return
+    }
+
+    if (mod && !event.altKey && !event.shiftKey && (key === 'backspace' || key === 'delete')) {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      window.mica.terminal.write(id, '\x01\x0b')
+      return
+    }
+
+    if (mod && !event.altKey && !event.shiftKey && key === 'arrowleft') {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      window.mica.terminal.write(id, '\x01')
+      return
+    }
+
+    if (mod && !event.altKey && !event.shiftKey && key === 'arrowright') {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      window.mica.terminal.write(id, '\x05')
+      return
+    }
+
+    if (!mod && event.altKey && !event.shiftKey && key === 'backspace') {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      window.mica.terminal.write(id, '\x1b\x7f')
+      return
+    }
+
+    if (!mod && event.altKey && !event.shiftKey && key === 'delete') {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      window.mica.terminal.write(id, '\x1bd')
+      return
+    }
+
+    if (!mod && event.altKey && !event.shiftKey && (key === 'arrowleft' || key === 'arrowright')) {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      window.mica.terminal.write(id, key === 'arrowleft' ? '\x1bb' : '\x1bf')
+      return
+    }
+  }
+
+  el.addEventListener('keydown', interceptKey, true)
+  el.addEventListener('keypress', interceptKey, true)
+
   term.attachCustomKeyEventHandler((event) => {
     if (event.type !== 'keydown') return true
 
@@ -177,27 +234,6 @@ function ensureTerminalView(id) {
 
     if (mod && !event.altKey && !event.shiftKey && (key === 'k' || key === 'l')) {
       term.clear()
-      return false
-    }
-
-    if (mod && !event.altKey && !event.shiftKey && (key === 'backspace' || key === 'delete')) {
-      window.mica.terminal.write(id, '\x01\x0b')
-      return false
-    }
-
-    if (mod && !event.altKey && !event.shiftKey && key === 'arrowleft') {
-      window.mica.terminal.write(id, '\x01')
-      return false
-    }
-
-    if (mod && !event.altKey && !event.shiftKey && key === 'arrowright') {
-      window.mica.terminal.write(id, '\x05')
-      return false
-    }
-
-    if (!mod && event.altKey && !event.shiftKey && (key === 'arrowleft' || key === 'arrowright')) {
-      const seq = key === 'arrowleft' ? '\x1bb' : '\x1bf'
-      window.mica.terminal.write(id, seq)
       return false
     }
 
@@ -284,7 +320,6 @@ function resolveTerminalCwd(terminalId) {
   if (!tree) return null
   const node = tree.getNode(terminalId)
   if (!node) return null
-  // Prefer parent folder chain
   return tree.resolveDefaultCwd(node.parent || '#')
 }
 
@@ -440,7 +475,7 @@ function bindSearch() {
   const clearBtn = document.getElementById('session-search-clear')
   const icon = document.getElementById('search-icon')
   if (icon) icon.textContent = '\u2315'
-  if (clearBtn) clearBtn.textContent = '\u00d7' 
+  if (clearBtn) clearBtn.textContent = '\u00d7'
 
   const syncClear = () => {
     if (!clearBtn || !input) return
