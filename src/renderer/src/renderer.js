@@ -185,6 +185,22 @@ function ensureTerminalView(id) {
       return false
     }
 
+    if (mod && !event.altKey && !event.shiftKey && key === 'arrowleft') {
+      window.mica.terminal.write(id, '\x01')
+      return false
+    }
+
+    if (mod && !event.altKey && !event.shiftKey && key === 'arrowright') {
+      window.mica.terminal.write(id, '\x05')
+      return false
+    }
+
+    if (!mod && event.altKey && !event.shiftKey && (key === 'arrowleft' || key === 'arrowright')) {
+      const seq = key === 'arrowleft' ? '\x1bb' : '\x1bf'
+      window.mica.terminal.write(id, seq)
+      return false
+    }
+
     return true
   })
 
@@ -423,8 +439,8 @@ function bindSearch() {
   const input = document.getElementById('session-search')
   const clearBtn = document.getElementById('session-search-clear')
   const icon = document.getElementById('search-icon')
-  if (icon) icon.textContent = '⌕'
-  if (clearBtn) clearBtn.textContent = '×' 
+  if (icon) icon.textContent = '\u2315'
+  if (clearBtn) clearBtn.textContent = '\u00d7' 
 
   const syncClear = () => {
     if (!clearBtn || !input) return
